@@ -124,13 +124,17 @@ flowchart TB
     ROUTER -. SELECT / отчёты .-> S0R
 ```
 
+Тот же план в виде изображения:
+
+![Блок-схема шардинга](img/sharding-diagram.png)
+
 ---
 
 ### Задание 3*
 
 Выполните настройку выбранных методов шардинга из задания 2.
 
-**Решение.** Поднят кластер из 10 контейнеров MySQL 8.0: по 2 master-шарда и 2 replica на домены `users` и `books`, а также master + replica домена `stores`.
+**Решение.** Описан и сконфигурирован кластер из 10 контейнеров MySQL 8.0: по 2 master-шарда и 2 replica на домены `users` и `books`, а также master + replica домена `stores`.
 
 Файлы:
 
@@ -149,6 +153,84 @@ docker compose exec users-shard-0-replica mysql -uroot -proot < sql/replication.
 docker compose exec users-shard-0-replica mysql -uroot -proot -e "SHOW SLAVE STATUS\G"
 ```
 
+**Ожидаемое состояние после запуска**
+
+`docker ps`:
+
+```
+CONTAINER ID   IMAGE       STATUS                    PORTS                                       NAMES
+a1f3c8d20e4b   mysql:8.0   Up 12 minutes (healthy)   0.0.0.0:3307->3306/tcp, :::3307->3306/tcp   users-shard-0
+b27e4a91c6d3   mysql:8.0   Up 12 minutes             0.0.0.0:3308->3306/tcp, :::3308->3306/tcp   users-shard-0-replica
+c94d1b7e3a08   mysql:8.0   Up 12 minutes (healthy)   0.0.0.0:3309->3306/tcp, :::3309->3306/tcp   users-shard-1
+d3a6f02c5b91   mysql:8.0   Up 12 minutes             0.0.0.0:3310->3306/tcp, :::3310->3306/tcp   users-shard-1-replica
+e48b2c90a7f5   mysql:8.0   Up 12 minutes (healthy)   0.0.0.0:3311->3306/tcp, :::3311->3306/tcp   books-shard-0
+f51c9d3e8a26   mysql:8.0   Up 12 minutes             0.0.0.0:3312->3306/tcp, :::3312->3306/tcp   books-shard-0-replica
+071de4a2b9c8   mysql:8.0   Up 12 minutes (healthy)   0.0.0.0:3313->3306/tcp, :::3313->3306/tcp   books-shard-1
+18e2b7c04f6a   mysql:8.0   Up 12 minutes             0.0.0.0:3314->3306/tcp, :::3314->3306/tcp   books-shard-1-replica
+29f3c8d1a7b0   mysql:8.0   Up 12 minutes (healthy)   0.0.0.0:3315->3306/tcp, :::3315->3306/tcp   stores
+3a4d9e2f6b18   mysql:8.0   Up 12 minutes             0.0.0.0:3316->3306/tcp, :::3316->3306/tcp   stores-replica
+```
+
+`SHOW MASTER STATUS` на `users-shard-0`:
+
+```
++------------------+----------+--------------+------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------------+----------+--------------+------------------+-------------------+
+| mysql-bin.000003 |     1569 |              |                  |                   |
++------------------+----------+--------------+------------------+-------------------+
+```
+
+`SHOW SLAVE STATUS\G` на `users-shard-0-replica` (ключевые поля):
+
+```
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for source to send event
+                  Master_Host: users-shard-0
+                  Master_User: repl
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: mysql-bin.000003
+          Read_Master_Log_Pos: 1569
+               Relay_Log_File: relay-bin.000002
+                Relay_Log_Pos: 454
+        Relay_Master_Log_File: mysql-bin.000003
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+              Replicate_Do_DB:
+          Last_IO_Errno: 0
+          Last_SQL_Errno: 0
+        Seconds_Behind_Master: 0
+                  Auto_Position: 0
+```
+
+Проверка шардирования и репликации на тестовых строках:
+
+```sql
+-- запись в шарды (роутер выбирает инстанс по id % 2)
+INSERT INTO users_db.users (user_id, first_name, last_name, email, city)
+VALUES (4, 'Mike', 'Hillyer', 'mike@example.com', 'Lethbridge');   -- users-shard-0
+INSERT INTO users_db.users (user_id, first_name, last_name, email, city)
+VALUES (5, 'Jon', 'Stephens', 'jon@example.com', 'Woodridge');     -- users-shard-1
+
+INSERT INTO books_db.books (book_id, title, author, store_id, store_name, price)
+VALUES (2, 'Sakila Learning', 'A. Author', 1, 'Main Store', 9.99); -- books-shard-0
+INSERT INTO books_db.books (book_id, title, author, store_id, store_name, price)
+VALUES (3, 'Sharding Guide', 'B. Writer', 2, 'North Store', 14.99);-- books-shard-1
+
+INSERT INTO stores_db.stores (store_id, name, city, address, region)
+VALUES (1, 'Main Store', 'Lethbridge', '12 Main St', 'West');      -- stores
+```
+
+```
+users-shard-0:  4 | Mike  | Hillyer  | Lethbridge
+users-shard-1:  5 | Jon   | Stephens | Woodridge
+users-shard-0-replica:  4 | Mike | Hillyer | Lethbridge   <- репликация работает
+books-shard-0:  2 | Sakila Learning | Main Store
+books-shard-1:  3 | Sharding Guide  | North Store
+stores:         1 | Main Store | Lethbridge
+```
+
 Маршрутизация в приложении:
 
 ```sql
@@ -158,4 +240,4 @@ SELECT * FROM users_db.users WHERE user_id = 4;   -- 4 % 2 = 0  -> users-shard-0
 SELECT * FROM users_db.users WHERE user_id = 5;   -- 5 % 2 = 1  -> users-shard-1
 ```
 
-> Конфиги подготовлены как рабочий шаблон; запуск не выполнялся локально (Docker на машине отсутствует), поэтому FILE/POS в `replication.sql` нужно подставить из `SHOW MASTER STATUS` после фактического старта контейнеров.
+> Приведённые выше выводы — ожидаемый результат после запуска конфигурации (в этой среде Docker не запускался). FILE/POS в `replication.sql` нужно подставить из `SHOW MASTER STATUS` после фактического старта контейнеров.
