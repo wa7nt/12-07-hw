@@ -1,0 +1,154 @@
+version: "3.8"
+
+services:
+  users-shard-0:
+    image: mysql:8.0
+    container_name: users-shard-0
+    hostname: users-shard-0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=10 --log-bin=mysql-bin --binlog-format=ROW --default-authentication-plugin=mysql_native_password
+    ports: ["3307:3306"]
+    volumes:
+      - users-shard-0-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+
+  users-shard-0-replica:
+    image: mysql:8.0
+    container_name: users-shard-0-replica
+    hostname: users-shard-0-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=11 --log-bin=mysql-bin --binlog-format=ROW --relay-log=relay-bin --read-only=ON --super-read-only=ON --default-authentication-plugin=mysql_native_password
+    ports: ["3308:3306"]
+    volumes:
+      - users-shard-0-replica-data:/var/lib/mysql
+    depends_on: [users-shard-0]
+
+  users-shard-1:
+    image: mysql:8.0
+    container_name: users-shard-1
+    hostname: users-shard-1
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=20 --log-bin=mysql-bin --binlog-format=ROW --default-authentication-plugin=mysql_native_password
+    ports: ["3309:3306"]
+    volumes:
+      - users-shard-1-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+
+  users-shard-1-replica:
+    image: mysql:8.0
+    container_name: users-shard-1-replica
+    hostname: users-shard-1-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=21 --log-bin=mysql-bin --binlog-format=ROW --relay-log=relay-bin --read-only=ON --super-read-only=ON --default-authentication-plugin=mysql_native_password
+    ports: ["3310:3306"]
+    volumes:
+      - users-shard-1-replica-data:/var/lib/mysql
+    depends_on: [users-shard-1]
+
+  books-shard-0:
+    image: mysql:8.0
+    container_name: books-shard-0
+    hostname: books-shard-0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=30 --log-bin=mysql-bin --binlog-format=ROW --default-authentication-plugin=mysql_native_password
+    ports: ["3311:3306"]
+    volumes:
+      - books-shard-0-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+
+  books-shard-0-replica:
+    image: mysql:8.0
+    container_name: books-shard-0-replica
+    hostname: books-shard-0-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=31 --log-bin=mysql-bin --binlog-format=ROW --relay-log=relay-bin --read-only=ON --super-read-only=ON --default-authentication-plugin=mysql_native_password
+    ports: ["3312:3306"]
+    volumes:
+      - books-shard-0-replica-data:/var/lib/mysql
+    depends_on: [books-shard-0]
+
+  books-shard-1:
+    image: mysql:8.0
+    container_name: books-shard-1
+    hostname: books-shard-1
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=40 --log-bin=mysql-bin --binlog-format=ROW --default-authentication-plugin=mysql_native_password
+    ports: ["3313:3306"]
+    volumes:
+      - books-shard-1-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+
+  books-shard-1-replica:
+    image: mysql:8.0
+    container_name: books-shard-1-replica
+    hostname: books-shard-1-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=41 --log-bin=mysql-bin --binlog-format=ROW --relay-log=relay-bin --read-only=ON --super-read-only=ON --default-authentication-plugin=mysql_native_password
+    ports: ["3314:3306"]
+    volumes:
+      - books-shard-1-replica-data:/var/lib/mysql
+    depends_on: [books-shard-1]
+
+  stores:
+    image: mysql:8.0
+    container_name: stores
+    hostname: stores
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=50 --log-bin=mysql-bin --binlog-format=ROW --default-authentication-plugin=mysql_native_password
+    ports: ["3315:3306"]
+    volumes:
+      - stores-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+
+  stores-replica:
+    image: mysql:8.0
+    container_name: stores-replica
+    hostname: stores-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --server-id=51 --log-bin=mysql-bin --binlog-format=ROW --relay-log=relay-bin --read-only=ON --super-read-only=ON --default-authentication-plugin=mysql_native_password
+    ports: ["3316:3306"]
+    volumes:
+      - stores-replica-data:/var/lib/mysql
+    depends_on: [stores]
+
+volumes:
+  users-shard-0-data:
+  users-shard-0-replica-data:
+  users-shard-1-data:
+  users-shard-1-replica-data:
+  books-shard-0-data:
+  books-shard-0-replica-data:
+  books-shard-1-data:
+  books-shard-1-replica-data:
+  stores-data:
+  stores-replica-data:
